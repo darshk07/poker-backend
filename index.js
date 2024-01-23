@@ -75,8 +75,13 @@ app.post('/join-room', async (req, res) => {
             const playerr = new User({ name: playerId, balance: 1000 });
             player = await playerr.save();
         }
-
-        await roomExists.addPlayer(player);
+        if (roomExists.players.length > 5) {
+            res.json({ message: 'Room is full' });
+            return;
+        }
+        if (!roomExists.players.includes(player._id)) {
+            await roomExists.addPlayer(player);
+        }
         const result = await roomExists.populate('players');
         await broadcastUpdate(wss, gameId, roomExists);
         res.json(result);
