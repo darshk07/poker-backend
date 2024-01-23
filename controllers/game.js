@@ -1,5 +1,6 @@
 const User = require('../models/user');
 const Room = require('../models/room');
+const wss = require('../index');
 
 module.exports.joinRoom = async (req, res) => {
     const { playerId, gameId } = req.body;
@@ -15,10 +16,15 @@ module.exports.joinRoom = async (req, res) => {
 
     await roomExists.addPlayer(player);
     const result = await roomExists.populate('players');
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(roomExists));
+        }
+    });
     res.json(result);
 }
 
-const createRoom = async (gameId) => {
+module.exports.createRoom = async (gameId) => {
     const room = new Room({
         id: gameId,
         potMoney: 0,
