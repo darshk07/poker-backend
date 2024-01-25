@@ -9,7 +9,7 @@ const { joinRoom, endRoom, createRoom } = require('./controllers/game');
 const { socketsConnection } = require('./controllers/sockets');
 const Room = require('./models/room');
 const User = require('./models/user');
-const broadcastUpdate = require('./utils/broadcast');
+const { broadcastUpdate, startGame } = require('./utils/broadcast');
 
 const dbURL = process.env.DB_URL;
 
@@ -34,20 +34,32 @@ wss.on('connection', (ws) => {
             const msg = JSON.parse(message);
             if (msg.action === "initiate") {
                 const { gameId, playerId } = msg;
+                const room = await Room.findOne({ id: gameId });
+                await room.populate('players');
+                //remove current player
+                room.players = room.players.filter((player) => player.name !== playerId);
+                const playerInfo = await User.findOne({ name: playerId });
+                const payload = { ...room._doc, playerInfo: playerInfo };
+                ws.playerId = playerInfo.name;
                 ws.gameId = gameId;
-                const room = await Room.findOne({ id: gameId });
-                await room.populate('players');
-                ws.send(JSON.stringify(room));
+                ws.isReady = false;
+                ws.send(JSON.stringify(payload));
             }
-            if (msg.action === "refresh") {
-                const { gameId, playerId } = msg;
-                const room = await Room.findOne({ id: gameId });
+            if (msg.action === "ready") {
+                const user = await User.updateOne({ name: ws.playerId }, { isReady: true });
+                ws.isReady = true;
+                const room = await Room.findOne({ id: ws.gameId });
                 await room.populate('players');
-                wss.clients.forEach((client) => {
-                    if (client.gameId === gameId && client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify(room));
-                    }
-                });
+                // const payload = { ...room._doc, playerInfo: user };
+                await broadcastUpdate(wss, ws.gameId, room);
+            }
+            if (msg.action === "unready") {
+                const user = await User.updateOne({ name: ws.playerId }, { isReady: false });
+                ws.isReady = false;
+                const room = await Room.findOne({ id: ws.gameId });
+                await room.populate('players');
+                // const payload = { ...room._doc, playerInfo: user };
+                await broadcastUpdate(wss, ws.gameId, room);
             }
         }
         catch (err) {
@@ -63,12 +75,24 @@ wss.on('connection', (ws) => {
 app.get('/health', (req, res) => {
     res.json({ message: 'Server is running' });
 });
+
+app.post('/fill-room', async (req, res) => {
+    const { gameId } = req.body;
+    const room = await Room.findOne({ id: gameId });
+    await room.populate('players');
+    await room.startGame();
+    console.log(room);
+    res.json(room);
+
+})
+
 app.post('/join-room', async (req, res) => {
     try {
         const { playerId, gameId } = req.body;
         let roomExists = await Room.findOne({ id: gameId });
         if (!roomExists) {
             roomExists = await createRoom(gameId);
+            await roomExists.startGame();
         }
         let player = await User.findOne({ name: playerId });
         if (!player) {
@@ -83,6 +107,8 @@ app.post('/join-room', async (req, res) => {
             await roomExists.addPlayer(player);
         }
         const result = await roomExists.populate('players');
+        // roomExists.players = roomExists.players.filter((player) => player.name !== playerId);
+        // const payload = { ...roomExists._doc, playerInfo: player };
         await broadcastUpdate(wss, gameId, roomExists);
         res.json(result);
     }

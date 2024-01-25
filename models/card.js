@@ -14,6 +14,10 @@ const cardSchema = new Schema({
         type: String,
         enum: ['red', 'black'],
     },
+    isOpen: {
+        type: Boolean,
+        default: false,
+    }
 });
 
 module.exports = cardSchema;

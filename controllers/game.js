@@ -40,10 +40,6 @@ module.exports.endRoom = async (req, res) => {
     if (!currentRoom) {
         return res.json({ error: 'Room not found' });
     }
-    const players = currentRoom.players;
-    for (const player of players) {
-        await User.findByIdAndDelete(player);
-    }
     await Room.findByIdAndDelete(currentRoom._id);
     res.json({ message: 'Room ended' });
 }
