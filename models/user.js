@@ -3,19 +3,23 @@ const cardSchema = require('./card');
 const Schema = mongoose.Schema;
 
 const userSchema = new Schema({
-    name: String,
-    balance: Number,
-    isReady: {
-        type: Boolean,
-        default: false,
-    },
-    isTurn: {
-        type: Boolean,
-        default: false,
-    },
-    cards: [
-        cardSchema
-    ],
+	name: String,
+	balance: Number,
+	isReady: {
+		type: Boolean,
+		default: false
+	},
+	isTurn: {
+		type: Boolean,
+		default: false
+	},
+	cards: [
+		cardSchema
+	],
+	socketId: {
+		type: Object,
+		default: null
+	}
 });
 
 const User = mongoose.model('User', userSchema);
