@@ -39,7 +39,7 @@ app.post('/fill-room', async (req, res) => {
 	const room = await Room.findOne({ id: gameId })
 	await room.populate('players')
 	await room.startGame()
-	console.log(room)
+	// console.log(room)
 	res.json(room)
 })
 
@@ -63,6 +63,11 @@ app.post('/join-room', async (req, res) => {
 		}
 		if (roomExists.players.length > 10) {
 			res.json({ message: 'Room is full' })
+			return
+		}
+		if (roomExists.isStarted) {
+			res.status(403); //	deny
+			res.json({ message: 'Game already started' })
 			return
 		}
 		if (!roomExists.players.includes(player._id)) {

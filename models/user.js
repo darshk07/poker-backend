@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const cardSchema = require('./card');
+const gameValues = require('../utils/constants');
 const Schema = mongoose.Schema;
 
 const userSchema = new Schema({
