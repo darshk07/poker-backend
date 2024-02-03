@@ -1,7 +1,7 @@
 const User = require('../models/user');
 const Room = require('../models/room');
 const { broadcastUpdate } = require('../utils/broadcast');
-const userSocketMap = require('../utils/UserSocketMap');
+const userSocketMap = require('../utils/usersocketmap');
 
 module.exports.socketsConnection = (wss, ws) => {
 	console.log('Client connected : ');
@@ -10,15 +10,14 @@ module.exports.socketsConnection = (wss, ws) => {
 			const msg = JSON.parse(message);
 			if (msg.action === 'initiate') {
 				const { gameId, playerId } = msg;
-				await User.updateOne({ name: playerId }, { ws })
+				await User.updateOne({ _id: playerId }, { ws })
 
 				//	CHANGE IN FUTURE TO GET PLAYER INFO USING ID
-				const playerInfo = (await User.find({ name: playerId }))[0];
+				const playerInfo = (await User.find({ _id: playerId }))[0];
 
 				ws.playerId = playerId;
 				ws.gameId = gameId;
 				ws.isReady = false;
-				ws.isTurn = false;
 				ws.userId = playerInfo._id.toString();
 				userSocketMap.addUserSocket(playerInfo._id.toString(), ws);
 
@@ -28,7 +27,7 @@ module.exports.socketsConnection = (wss, ws) => {
 			}
 
 			if (msg.action === 'ready') {
-				await User.updateOne({ name: ws.playerId }, { isReady: true });
+				await User.updateOne({ _id: ws.playerId }, { isReady: true });
 				ws.isReady = true;
 
 				//	check if all players are ready
@@ -44,31 +43,20 @@ module.exports.socketsConnection = (wss, ws) => {
 				}
 
 				if (allReady) {
-					//	assign turn to a random player
-					const updatedRoom = await Room.findOneAndUpdate(
-						{ id: ws.gameId },
-						{ isStarted: true },
-						{ new: true });
-					await updatedRoom.populate('players');
-					const turn = Math.floor(Math.random() * updatedRoom.players.length);
-					const turnPlayer = await User.findOne({ _id: updatedRoom.players[turn]._id })
-					await turnPlayer.updateOne({ isTurn: true });
-					console.log('Turn assigned to :', turnPlayer);
-					await broadcastUpdate(ws.gameId, updatedRoom);
+					await room.startGame();
+					await room.populate('players');
+					const turn = Math.floor(Math.random() * room.players.length);
+					const turnPlayer = await User.findOne({ _id: room.players[turn]._id });
+					await room.setTurnPlayer(turnPlayer._id.toString());
+					await broadcastUpdate(ws.gameId, room);
 					return;
 				}
 
 				await broadcastUpdate(ws.gameId, room);
 			}
 
-			//	temporary
-			if (msg.action === 'myturn') {
-				ws.isTurn = true;
-				return;
-			}
-
 			if (msg.action === 'unready') {
-				await User.updateOne({ name: ws.playerId }, { isReady: false });
+				await User.updateOne({ _id: ws.playerId }, { isReady: false });
 				ws.isReady = false;
 				const room = await Room.findOne({ id: ws.gameId });
 				await room.populate('players');
@@ -76,14 +64,15 @@ module.exports.socketsConnection = (wss, ws) => {
 			}
 
 			if (msg.action === 'call') {
-				if (ws.isTurn) {
-					const user = await User.findOne({ name: ws.playerId });
-					const room = await Room.findOne({ id: ws.gameId });
-					await room.populate('players');
-					const updatedRoom = await room.callTransaction(ws.userId);
-					console.log(updatedRoom);
-					await broadcastUpdate(ws.gameId, updatedRoom);
+				console.log('call', ws.userId);
+				const room = await Room.findOne({ id: ws.gameId });
+				if (room.turn.toString() !== ws.userId) {
+					return;
 				}
+				await room.callTransaction(ws.userId)
+				await room.nextPlayer();
+				await room.populate('players');
+				await broadcastUpdate(ws.gameId, room);
 			}
 		} catch (err) {
 			console.log(err);

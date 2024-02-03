@@ -16,7 +16,8 @@ const roomSchema = new Schema({
 		default: false
 	},
 	potMoney: Number,
-	potCards: [cardSchema]
+	potCards: [cardSchema],
+	turn: String
 });
 
 roomSchema.methods.addPlayer = function (player) {
@@ -24,10 +25,13 @@ roomSchema.methods.addPlayer = function (player) {
 	return this.save();
 };
 
-roomSchema.methods.startGame = function () {
+roomSchema.methods.startGame = async function () {
 	const cards = shuffleCards();
 	this.potCards = cards;
+	this.isStarted = true;
+	await this.nextPlayer();
 	return this.save();
+
 }
 
 roomSchema.methods.getDataModel = async function (userId) {
@@ -45,6 +49,30 @@ roomSchema.methods.callTransaction = async function (playerId) {
 	const user = await User.findByIdAndUpdate(playerId, { $inc: { balance: -gameValues.CALL_AMOUNT } }, { new: true });
 	this.potMoney += gameValues.CALL_AMOUNT;
 	await this.save();
+	return this.populate('players');
+}
+
+roomSchema.methods.nextPlayer = async function () {
+	// write a function to set the turn variable to the next player in the array of players;
+	// if the current player is the last player in the array, set the turn variable to the first player in the array
+	// return this.populate('players');
+	const players = this.players;
+	if (players.length === 1) {
+		this.turn = players[0]._id;
+		return this.save();
+	}
+	const currentPlayerIndex = players.findIndex((player) => player._id.toString() === this.turn);
+	if (currentPlayerIndex === players.length - 1) {
+		this.turn = players[0]._id;
+	} else {
+		this.turn = players[currentPlayerIndex + 1]._id;
+	}
+	return this.save();
+}
+
+roomSchema.methods.setTurnPlayer = async function (id) {
+	this.turn = id;
+	this.save();
 	return this.populate('players');
 }
 

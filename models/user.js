@@ -10,10 +10,6 @@ const userSchema = new Schema({
 		type: Boolean,
 		default: false
 	},
-	isTurn: {
-		type: Boolean,
-		default: false
-	},
 	cards: [
 		cardSchema
 	],

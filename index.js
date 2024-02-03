@@ -45,8 +45,8 @@ app.post('/fill-room', async (req, res) => {
 
 app.post('/join-room', async (req, res) => {
 	try {
-		const { playerId, gameId } = req.body
-		if (!playerId || !gameId) {
+		const { name, gameId } = req.body
+		if (!name || !gameId) {
 			res.status(400)
 			res.json({ message: 'Invalid request' })
 			return;
@@ -54,11 +54,10 @@ app.post('/join-room', async (req, res) => {
 		let roomExists = await Room.findOne({ id: gameId })
 		if (!roomExists) {
 			roomExists = await createRoom(gameId)
-			await roomExists.startGame()
 		}
-		let player = await User.findOne({ name: playerId })
+		let player = await User.findOne({ name })
 		if (!player) {
-			const playerr = new User({ name: playerId, balance: 1000 })
+			const playerr = new User({ name, balance: 1000 })
 			player = await playerr.save()
 		}
 		if (roomExists.players.length > 10) {
@@ -73,10 +72,10 @@ app.post('/join-room', async (req, res) => {
 		if (!roomExists.players.includes(player._id)) {
 			await roomExists.addPlayer(player)
 		}
-		const result = await roomExists.populate('players')
-
+		await roomExists.populate('players')
+		const payload = { id: player._id };
 		await broadcastUpdate(gameId, roomExists)
-		res.json(result)
+		res.json(payload)
 	} catch (err) {
 		console.log(err)
 	}
